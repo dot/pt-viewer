@@ -50,6 +50,58 @@ export interface SearchResultRow {
   comment_seq: number | null;
 }
 
+/** Normalized, validated search-form state shared by the HTML and JSON UIs. */
+export interface SearchFormState {
+  q: string;
+  type: string;
+  state: string;
+  label: string;
+  user: string;
+  from: string;
+  to: string;
+  page: number;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Parse raw query-param access into a validated SearchFormState. */
+export function parseSearchForm(
+  get: (name: string) => string | undefined
+): SearchFormState {
+  const v = (name: string) => (get(name) ?? "").trim();
+  const page = Number.parseInt(v("page"), 10);
+  const from = v("from");
+  const to = v("to");
+  return {
+    q: v("q"),
+    type: v("type"),
+    state: v("state"),
+    label: v("label"),
+    user: v("user"),
+    from: DATE_RE.test(from) ? from : "",
+    to: DATE_RE.test(to) ? to : "",
+    page: Number.isFinite(page) && page > 0 ? page : 1,
+  };
+}
+
+/** Convert a validated form state into buildSearchQuery input. */
+export function formToSearchInput(
+  projectId: number,
+  f: SearchFormState
+): SearchInput {
+  return {
+    projectId,
+    q: f.q,
+    type: f.type || undefined,
+    state: f.state || undefined,
+    label: f.label || undefined,
+    user: f.user || undefined,
+    from: f.from || undefined,
+    to: f.to || undefined,
+    page: f.page,
+  };
+}
+
 /** `123` / `#123` → 123, anything else → null (ticket-number fast path). */
 export function parseTicketNumber(q: string | undefined | null): number | null {
   if (!q) return null;

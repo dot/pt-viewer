@@ -4,7 +4,12 @@ import type { FC, Child } from "hono/jsx";
 import { raw } from "hono/html";
 import { renderMarkdown } from "./markdown";
 import { extraSections } from "./extra";
-import { SNIPPET_START, SNIPPET_END, type SearchResultRow } from "./search";
+import {
+  SNIPPET_START,
+  SNIPPET_END,
+  type SearchFormState,
+  type SearchResultRow,
+} from "./search";
 import type {
   AttachmentRow,
   CommentRow,
@@ -210,17 +215,6 @@ export const ProjectListPage: FC<{ projects: ProjectRow[] }> = ({
     </main>
   </Layout>
 );
-
-export interface SearchFormState {
-  q: string;
-  type: string;
-  state: string;
-  label: string;
-  user: string;
-  from: string;
-  to: string;
-  page: number;
-}
 
 export interface SearchOptions {
   types: string[];

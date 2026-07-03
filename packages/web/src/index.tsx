@@ -1,41 +1,31 @@
 import { Hono, type Context } from "hono";
 import {
   buildSearchQuery,
+  formToSearchInput,
+  parseSearchForm,
   parseTicketNumber,
   PAGE_SIZE,
   type SearchResultRow,
 } from "./search";
-import {
-  NotFoundPage,
-  ProjectListPage,
-  SearchPage,
-  StoryPage,
-  type SearchFormState,
-} from "./views";
-import type {
-  AttachmentRow,
-  CommentRow,
-  ProjectRow,
-  StoryRow,
-  TaskRow,
-} from "./types";
+import { api } from "./api";
+import { fetchStoryBundle, getProject, type AppEnv } from "./data";
+import { NotFoundPage, ProjectListPage, SearchPage, StoryPage } from "./views";
+import type { ProjectRow } from "./types";
 
-type Env = { Bindings: { DB: D1Database } };
+const app = new Hono<AppEnv>();
 
-const app = new Hono<Env>();
+// /api paths must always 404 as JSON — including "/api" itself, which would
+// otherwise fall into the HTML /:project wildcard.
+const notFound = (c: Context<AppEnv>) =>
+  c.req.path === "/api" || c.req.path.startsWith("/api/")
+    ? c.json({ error: "not_found" }, 404)
+    : c.html(<NotFoundPage />, 404);
 
-const notFound = (c: Context<Env>) => c.html(<NotFoundPage />, 404);
+// JSON API for machine clients (registered before the HTML wildcards).
+// Cloudflare Access authenticates in front of the Worker; no auth here.
+app.route("/api", api);
 
-app.notFound((c) => c.html(<NotFoundPage />, 404));
-
-function getProject(db: D1Database, slug: string): Promise<ProjectRow | null> {
-  return db
-    .prepare("SELECT id, slug, name FROM projects WHERE slug = ?")
-    .bind(slug)
-    .first<ProjectRow>();
-}
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+app.notFound(notFound);
 
 // GET / — single project: jump straight to it; otherwise list projects.
 app.get("/", async (c) => {
@@ -52,12 +42,11 @@ app.get("/:project", async (c) => {
   const project = await getProject(db, c.req.param("project"));
   if (!project) return notFound(c);
 
-  const query = (name: string) => (c.req.query(name) ?? "").trim();
-  const q = query("q");
+  const form = parseSearchForm((name) => c.req.query(name));
 
   // Ticket-number fast path: "#123" / "123" jumps to the story if it exists
   // in this project; otherwise fall through to a normal search.
-  const ticket = parseTicketNumber(q);
+  const ticket = parseTicketNumber(form.q);
   if (ticket !== null) {
     const hit = await db
       .prepare("SELECT id FROM stories WHERE id = ? AND project_id = ?")
@@ -66,29 +55,7 @@ app.get("/:project", async (c) => {
     if (hit) return c.redirect(`/${project.slug}/stories/${hit.id}`);
   }
 
-  const pageNum = Number.parseInt(query("page"), 10);
-  const form: SearchFormState = {
-    q,
-    type: query("type"),
-    state: query("state"),
-    label: query("label"),
-    user: query("user"),
-    from: DATE_RE.test(query("from")) ? query("from") : "",
-    to: DATE_RE.test(query("to")) ? query("to") : "",
-    page: Number.isFinite(pageNum) && pageNum > 0 ? pageNum : 1,
-  };
-
-  const built = buildSearchQuery({
-    projectId: project.id,
-    q: form.q,
-    type: form.type || undefined,
-    state: form.state || undefined,
-    label: form.label || undefined,
-    user: form.user || undefined,
-    from: form.from || undefined,
-    to: form.to || undefined,
-    page: form.page,
-  });
+  const built = buildSearchQuery(formToSearchInput(project.id, form));
 
   const [searchRs, typesRs, statesRs, labelsRs, usersRs] = await db.batch<
     Record<string, unknown>
@@ -149,68 +116,24 @@ app.get("/:project", async (c) => {
 
 // GET /:project/stories/:id — story detail.
 app.get("/:project/stories/:id", async (c) => {
-  const db = c.env.DB;
   const idParam = c.req.param("id");
   if (!/^\d+$/.test(idParam)) return notFound(c);
-  const id = Number(idParam);
 
-  const project = await getProject(db, c.req.param("project"));
+  const project = await getProject(c.env.DB, c.req.param("project"));
   if (!project) return notFound(c);
 
-  const [storyRs, ownersRs, labelsRs, tasksRs, commentsRs, attachmentsRs] =
-    await db.batch<Record<string, unknown>>([
-      db
-        .prepare(
-          `SELECT s.*, u.name AS requested_by
-             FROM stories s LEFT JOIN users u ON u.id = s.requested_by_id
-            WHERE s.id = ? AND s.project_id = ?`
-        )
-        .bind(id, project.id),
-      db
-        .prepare(
-          `SELECT u.name FROM story_owners so
-             JOIN users u ON u.id = so.user_id
-            WHERE so.story_id = ? ORDER BY so.position`
-        )
-        .bind(id),
-      db
-        .prepare("SELECT label FROM story_labels WHERE story_id = ? ORDER BY label")
-        .bind(id),
-      db
-        .prepare(
-          "SELECT seq, description, status FROM tasks WHERE story_id = ? ORDER BY seq"
-        )
-        .bind(id),
-      db
-        .prepare(
-          `SELECT cm.seq, cm.commented_on, cm.body, u.name AS author
-             FROM comments cm LEFT JOIN users u ON u.id = cm.author_id
-            WHERE cm.story_id = ? ORDER BY cm.seq`
-        )
-        .bind(id),
-      db
-        .prepare(
-          "SELECT filename, size, rel_path FROM attachments WHERE story_id = ? ORDER BY filename"
-        )
-        .bind(id),
-    ]);
-
-  const story = (storyRs!.results?.[0] ?? null) as unknown as StoryRow | null;
-  if (!story) return notFound(c);
+  const bundle = await fetchStoryBundle(c.env.DB, project.id, Number(idParam));
+  if (!bundle) return notFound(c);
 
   return c.html(
     <StoryPage
       project={project}
-      story={story}
-      owners={((ownersRs!.results ?? []) as { name: string }[]).map(
-        (r) => r.name
-      )}
-      labels={((labelsRs!.results ?? []) as { label: string }[]).map(
-        (r) => r.label
-      )}
-      tasks={(tasksRs!.results ?? []) as unknown as TaskRow[]}
-      comments={(commentsRs!.results ?? []) as unknown as CommentRow[]}
-      attachments={(attachmentsRs!.results ?? []) as unknown as AttachmentRow[]}
+      story={bundle.story}
+      owners={bundle.owners}
+      labels={bundle.labels}
+      tasks={bundle.tasks}
+      comments={bundle.comments}
+      attachments={bundle.attachments}
     />
   );
 });
