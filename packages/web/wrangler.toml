@@ -1,0 +1,16 @@
+# pt-viewer web — Hono SSR on Cloudflare Workers, backed by D1 (read-only data).
+name = "pt-viewer"
+main = "src/index.tsx"
+compatibility_date = "2025-06-01"
+
+# Static assets (built Tailwind stylesheet, favicon). Anything not matching a
+# file in ./public falls through to the Worker.
+[assets]
+directory = "./public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pt-viewer"
+# Placeholder — Terraform (infra/) supplies the real database_id in production.
+# `wrangler dev` / `wrangler d1 execute --local` do not need a real id.
+database_id = "00000000-0000-0000-0000-000000000000"
