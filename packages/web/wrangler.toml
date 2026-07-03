@@ -11,6 +11,4 @@ directory = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "pt-viewer"
-# Placeholder — Terraform (infra/) supplies the real database_id in production.
-# `wrangler dev` / `wrangler d1 execute --local` do not need a real id.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "1be26e34-87fa-4831-97f8-e715abfdae84"
