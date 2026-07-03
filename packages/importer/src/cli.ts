@@ -55,6 +55,9 @@ function main(): void {
   console.log(`labels: ${stats.labels}`);
   console.log(`attachments: ${stats.attachments}`);
   console.log(`orphan attachment folders: ${stats.orphanAttachmentFolders}`);
+  if (stats.dumpOversizedStatements !== undefined) {
+    console.log(`dump statements over byte budget: ${stats.dumpOversizedStatements}`);
+  }
 }
 
 main();

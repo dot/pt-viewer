@@ -159,6 +159,7 @@ describe('runImport end to end', () => {
       attachments: 1,
       unparsedCommentSuffixes: 1,
       orphanAttachmentFolders: 1,
+      dumpOversizedStatements: 0,
     });
   });
 

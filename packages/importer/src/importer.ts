@@ -28,6 +28,8 @@ export interface ImportStats {
   attachments: number;
   unparsedCommentSuffixes: number;
   orphanAttachmentFolders: number;
+  /** Only set when a dump was written: statements still over the byte budget. */
+  dumpOversizedStatements?: number;
 }
 
 /** Run one full import: export dir -> SQLite file (+ optional D1 SQL dump). */
@@ -49,8 +51,11 @@ export function runImport(options: ImportOptions): ImportStats {
   });
 
   try {
+    let dumpOversizedStatements: number | undefined;
     if (options.dumpPath) {
-      fs.writeFileSync(options.dumpPath, generateDump(db, schemaSql));
+      const dump = generateDump(db, schemaSql);
+      fs.writeFileSync(options.dumpPath, dump.sql);
+      dumpOversizedStatements = dump.oversizedStatements;
     }
 
     const count = (sql: string): number =>
@@ -63,7 +68,7 @@ export function runImport(options: ImportOptions): ImportStats {
       storiesByType[type] = n;
     }
 
-    return {
+    const stats: ImportStats = {
       stories: count('SELECT COUNT(*) FROM stories'),
       storiesByType,
       comments: count('SELECT COUNT(*) FROM comments'),
@@ -74,6 +79,10 @@ export function runImport(options: ImportOptions): ImportStats {
       unparsedCommentSuffixes,
       orphanAttachmentFolders: orphanFolders,
     };
+    if (dumpOversizedStatements !== undefined) {
+      stats.dumpOversizedStatements = dumpOversizedStatements;
+    }
+    return stats;
   } finally {
     db.close();
   }
