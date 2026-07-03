@@ -1,0 +1,23 @@
+{
+  "name": "@pt-viewer/importer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Converts a PivotalTracker CSV export into a SQLite database and a Cloudflare-D1-compatible SQL dump",
+  "scripts": {
+    "import": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "csv-parse": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.1.0",
+    "tsx": "^4.22.5",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
