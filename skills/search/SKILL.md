@@ -11,39 +11,24 @@ description: >
 
 PivotalTracker export の読み取り専用ビューア（https://github.com/dot/pt-viewer）。
 ブラウザ閲覧は Cloudflare Access のメールOTP、この skill が使う API は Service Token 認証。
+トークンは 1Password から実行時に `op read` で取得する（平文をディスクに置かない）。
 
 ## Config
 
-認証情報は `~/.config/pt-viewer/env`（chmod 600）から読む:
+`~/.config/pt-viewer/env`（非シークレットの座標のみ、chmod 600）:
 
 ```bash
-set -a; source ~/.config/pt-viewer/env; set +a
-# PT_VIEWER_BASE_URL            (現在: https://pt-viewer.prebyte.workers.dev)
-# PT_VIEWER_ACCESS_CLIENT_ID
-# PT_VIEWER_ACCESS_CLIENT_SECRET
+PT_VIEWER_BASE_URL=<pt-viewer の URL>
+PT_VIEWER_OP_ACCOUNT=<会社の 1Password アカウント URL>
+PT_VIEWER_OP_ITEM=op://<共有保管庫>/<Service Token アイテム>
 ```
 
-**値を echo / ログ / 会話に出さない。** 存在確認は `[ -n "$VAR" ] && echo SET || echo MISSING` のみ。
+アイテムには `client_id` / `client_secret` フィールドが必要（会社共有保管庫、管理者 @dot が管理）。
 
-### 初回セットアップ（ユーザー向け）
+**secret の値を echo / ログ / 会話に出さない。** curl ヘッダへの command substitution 渡しのみ。
 
-Service Token は 1Password の会社共有保管庫にある（見つからなければ管理者 @dot に依頼）。
-`op` CLI があれば1コマンドで env を生成できる:
-
-```bash
-mkdir -p ~/.config/pt-viewer
-OP_ACCOUNT=<会社アカウント>.1password.com op inject -o ~/.config/pt-viewer/env <<'EOF'
-PT_VIEWER_BASE_URL=https://pt-viewer.prebyte.workers.dev
-PT_VIEWER_ACCESS_CLIENT_ID={{ op://<共有保管庫>/pt-viewer-team/client_id }}
-PT_VIEWER_ACCESS_CLIENT_SECRET={{ op://<共有保管庫>/pt-viewer-team/credential }}
-EOF
-chmod 600 ~/.config/pt-viewer/env
-```
-
-（op を使わない場合は同じ3変数を手書きで作成。1Password のアイテム名・フィールド名は
-保管庫の実物に合わせる）
-
-env ファイルが無い状態でこの skill が呼ばれたら、上記手順をユーザーに案内して止まる。
+env ファイルが無い・op read が失敗する場合は、上記セットアップ（env 作成、`op` CLI +
+アプリ連携、共有保管庫へのアクセス権）をユーザーに案内して止まる。
 
 ## 使い方
 
@@ -51,9 +36,10 @@ env ファイルが無い状態でこの skill が呼ばれたら、上記手順
 
 ```bash
 set -a; source ~/.config/pt-viewer/env; set +a
-pt() { curl -s -H "CF-Access-Client-Id: $PT_VIEWER_ACCESS_CLIENT_ID" \
-             -H "CF-Access-Client-Secret: $PT_VIEWER_ACCESS_CLIENT_SECRET" \
-             "$PT_VIEWER_BASE_URL$1"; }
+pt() { curl -s \
+  -H "CF-Access-Client-Id: $(op read "$PT_VIEWER_OP_ITEM/client_id" --account "$PT_VIEWER_OP_ACCOUNT")" \
+  -H "CF-Access-Client-Secret: $(op read "$PT_VIEWER_OP_ITEM/client_secret" --account "$PT_VIEWER_OP_ACCOUNT")" \
+  "$PT_VIEWER_BASE_URL$1"; }
 ```
 
 ### 検索
@@ -84,10 +70,16 @@ pt "/api/ptosh/stories/165240043" | jq '{title, comments: [.comments[] | {seq, a
 
 本文が長いことがある。まず jq で構造を絞ってから必要フィールドを読む。
 
+### プロジェクト一覧
+
+```bash
+pt "/api/projects"
+```
+
 ## Notes
 
 - **Linear に貼る permalink** は `$PT_VIEWER_BASE_URL` + `permalink`（例 `.../ptosh/stories/165240043#comment-5`）。閲覧は Access ログイン（チームメンバーのメールは許可済み）
 - 302 で cloudflareaccess.com にリダイレクトされる場合は Service Token が無効/未設定
 - 添付はメタデータのみ（`rel_path` 表示）。実体は export フォルダ保持者（@dot）に依頼
 - 日付は day 精度。同日コメントの順序は `seq` が正
-- カスタムドメイン移行時は env の `PT_VIEWER_BASE_URL` を書き換えるだけ
+- ドメイン移行時は env の `PT_VIEWER_BASE_URL` を書き換えるだけ
