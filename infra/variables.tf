@@ -6,7 +6,6 @@ variable "account_id" {
 variable "domain" {
   description = "Apex domain for the app (must be a zone in the Cloudflare account; registration itself is a manual step — Terraform cannot purchase domains)"
   type        = string
-  default     = "ptview.dev"
 }
 
 variable "app_hostname" {

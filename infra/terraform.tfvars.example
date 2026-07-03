@@ -1,6 +1,6 @@
 # Copy to terraform.tfvars (gitignored) and fill in.
 account_id = "your-cloudflare-account-id"
-domain     = "ptview.dev"
+domain     = "viewer.example.com"
 
 # Mirror of Linear workspace members.
 allowed_emails = [
