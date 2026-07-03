@@ -1,0 +1,5 @@
+{
+  "name": "pt-viewer",
+  "description": "Search PivotalTracker export tickets/comments via the pt-viewer JSON API",
+  "version": "1.0.0"
+}

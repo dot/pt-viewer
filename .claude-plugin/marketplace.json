@@ -1,0 +1,13 @@
+{
+  "name": "pt-viewer",
+  "owner": {
+    "name": "dot"
+  },
+  "plugins": [
+    {
+      "name": "pt-viewer",
+      "source": ".",
+      "description": "Search PivotalTracker export tickets/comments via the pt-viewer JSON API"
+    }
+  ]
+}
